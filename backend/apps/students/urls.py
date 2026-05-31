@@ -1,0 +1,32 @@
+"""
+URL patterns for the students app.
+"""
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import (
+    StudentViewSet,
+    SubjectViewSet,
+    MarksViewSet,
+    PredictionViewSet,
+    WeakAreaViewSet,
+    RecommendationViewSet,
+    DashboardView,
+    TriggerAnalysisView,
+    ChatView,
+)
+
+router = DefaultRouter()
+router.register(r'students', StudentViewSet, basename='student')
+router.register(r'subjects', SubjectViewSet, basename='subject')
+router.register(r'marks', MarksViewSet, basename='marks')
+router.register(r'predictions', PredictionViewSet, basename='prediction')
+router.register(r'weak-areas', WeakAreaViewSet, basename='weakarea')
+router.register(r'recommendations', RecommendationViewSet, basename='recommendation')
+
+urlpatterns = [
+    path('', include(router.urls)),
+    path('dashboard/<int:student_id>/', DashboardView.as_view(), name='dashboard'),
+    path('analysis/trigger/', TriggerAnalysisView.as_view(), name='trigger-analysis'),
+    path('chat/query/', ChatView.as_view(), name='chat-query'),
+]
