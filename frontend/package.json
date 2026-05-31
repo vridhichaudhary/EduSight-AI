@@ -1,0 +1,37 @@
+{
+  "name": "student-performance-predictor-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-powered educational analytics platform",
+  "author": "Your Name",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .js,.jsx",
+    "format": "prettier --write \"src/**/*.{js,jsx,css}\""
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.2",
+    "recharts": "^2.10.3",
+    "react-dropzone": "^14.2.3",
+    "react-hook-form": "^7.49.2",
+    "@tanstack/react-query": "^5.13.4",
+    "zustand": "^4.4.7",
+    "lucide-react": "^0.294.0",
+    "date-fns": "^3.0.6",
+    "papaparse": "^5.4.1",
+    "framer-motion": "^10.16.16"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "tailwindcss": "^3.3.6",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "vite": "^5.0.8"
+  }
+}

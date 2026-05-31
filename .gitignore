@@ -1,0 +1,41 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.parcel-cache/
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/env/
+backend/ENV/
+backend/.vscode/
+backend/.idea/
+backend/ml_models/
+backend/vectorstores/
+# Database
+*.db
+*.sqlite3
+postgres_data/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+# Logs
+*.log
+logs/
+# OS
+.DS_Store
+Thumbs.db
+# Docker
+docker-compose.override.yml
