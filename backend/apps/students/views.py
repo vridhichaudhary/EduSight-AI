@@ -531,57 +531,103 @@ class TriggerAnalysisView(APIView):
 # ─────────────────────────────────────────────
 class ChatView(APIView):
     """
-    POST /api/chat/query/     → Send a message
-    GET  /api/chat/query/?student_id=1 → Get chat history
+    LangChain-powered chat interface.
+
+    POST /api/chat/query/
+    Body: { "student_id": 1, "message": "Which subject needs most work?" }
+
+    GET /api/chat/query/?student_id=1
+    Returns conversation history.
     """
 
     def post(self, request):
         try:
-            student_id = request.data.get('student_id')
-            message = request.data.get('message', '').strip()
+            student_id   = request.data.get('student_id')
+            user_message = request.data.get('message', '').strip()
 
-            if not student_id or not message:
+            if not student_id or not user_message:
                 return APIResponse.error(
                     message='student_id and message are required',
-                    errors={'student_id': 'Required', 'message': 'Required'}
+                    errors={
+                        'student_id': 'Required',
+                        'message':    'Required',
+                    }
+                )
+
+            if len(user_message) > 1000:
+                return APIResponse.error(
+                    message='Message too long',
+                    errors={'message': 'Maximum 1000 characters'}
                 )
 
             student = get_object_or_404(Student, pk=student_id)
 
-            ChatMessage.objects.create(student=student, role='user', content=message)
-
-            # LangChain will be wired in Task 7
-            ai_response = (
-                f"Thank you for your question: '{message}'. "
-                f"AI-powered responses will be available once the ML pipeline is connected."
+            # Save user message
+            ChatMessage.objects.create(
+                student = student,
+                role    = 'user',
+                content = user_message,
             )
-            ai_message = ChatMessage.objects.create(student=student, role='assistant', content=ai_response)
+
+            # Generate AI response via LangChain ChatEngine
+            try:
+                from apps.chat.chat_engine import ChatEngine
+                engine   = ChatEngine(student_id=int(student_id))
+                ai_reply = engine.generate_response(user_message)
+            except Exception as e:
+                logger.error(f"ChatEngine error: {e}")
+                ai_reply = (
+                    "I'm having trouble accessing your performance data. "
+                    "Please ensure analysis has been run for your profile "
+                    "by clicking Run Analysis on the dashboard."
+                )
+
+            # Save AI response
+            ai_message = ChatMessage.objects.create(
+                student = student,
+                role    = 'assistant',
+                content = ai_reply,
+            )
+
+            logger.info(
+                f"Chat: student={student_id}, "
+                f"response_len={len(ai_reply)}"
+            )
 
             return APIResponse.success(
                 data={
-                    'message_id': ai_message.id,
-                    'student_id': student_id,
-                    'user_message': message,
-                    'ai_response': ai_response,
-                    'timestamp': ai_message.created_at.isoformat(),
+                    'message_id':   ai_message.id,
+                    'student_id':   student_id,
+                    'user_message': user_message,
+                    'ai_response':  ai_reply,
+                    'timestamp':    ai_message.created_at.isoformat(),
                 },
-                message='Message sent successfully'
+                message='Message processed'
             )
 
         except Exception as e:
             logger.error(f"Chat error: {str(e)}")
-            return APIResponse.error(message='Failed to process message', errors={'detail': str(e)})
+            return APIResponse.error(
+                message='Failed to process message',
+                errors={'detail': str(e)}
+            )
 
     def get(self, request):
+        """Get conversation history for a student."""
         try:
             student_id = request.query_params.get('student_id')
             if not student_id:
                 return APIResponse.error(message='student_id is required')
 
-            student = get_object_or_404(Student, pk=student_id)
-            messages = ChatMessage.objects.filter(student=student).order_by('created_at')
-            serializer = ChatMessageSerializer(messages, many=True)
-            return APIResponse.success(data=serializer.data, message=f'Retrieved {len(serializer.data)} messages')
+            student  = get_object_or_404(Student, pk=student_id)
+            messages = ChatMessage.objects.filter(
+                student=student
+            ).order_by('created_at')
 
+            serializer = ChatMessageSerializer(messages, many=True)
+            return APIResponse.success(
+                data=serializer.data,
+                message=f'{len(serializer.data)} messages'
+            )
         except Exception as e:
             return APIResponse.error(message='Failed to get chat history')

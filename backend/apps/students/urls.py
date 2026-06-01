@@ -27,6 +27,5 @@ router.register(r'recommendations', RecommendationViewSet, basename='recommendat
 urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/<int:student_id>/', DashboardView.as_view(), name='dashboard'),
-    path('analysis/trigger/', TriggerAnalysisView.as_view(), name='trigger-analysis'),
     path('chat/query/', ChatView.as_view(), name='chat-query'),
 ]
