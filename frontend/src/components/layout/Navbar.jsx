@@ -11,7 +11,6 @@ import Button from '../ui/Button'
 const navLinks = [
   { href: '/students', label: 'Students', icon: Users },
   { href: '/upload',   label: 'Upload',   icon: Upload },
-  { href: '/chat',     label: 'Chat',     icon: MessageSquare },
 ]
 
 export default function Navbar() {

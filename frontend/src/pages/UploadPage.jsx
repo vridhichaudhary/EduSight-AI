@@ -61,10 +61,31 @@ const REQUIRED_COLS = [
   'exam_date',
 ]
 
+const COLUMN_ALIASES = {
+  'name': 'student_name',
+  'student': 'student_name',
+  'studentname': 'student_name',
+  'course': 'subject',
+  'class': 'subject',
+  'marks': 'marks_obtained',
+  'score': 'marks_obtained',
+  'obtained': 'marks_obtained',
+  'max': 'max_marks',
+  'total': 'max_marks',
+  'total_marks': 'max_marks',
+  'type': 'exam_type',
+  'exam': 'exam_type',
+  'date': 'exam_date',
+  'time': 'exam_date',
+}
+
+function normalizeHeader(header) {
+  const clean = header.toLowerCase().trim().replace(/ /g, '_')
+  return COLUMN_ALIASES[clean] || clean
+}
+
 function validateCSV(data, fields) {
-  const normalized = fields.map((f) =>
-    f.toLowerCase().trim().replace(/ /g, '_')
-  )
+  const normalized = fields.map(normalizeHeader)
   const missing = REQUIRED_COLS.filter((c) => !normalized.includes(c))
   const errors  = []
 
@@ -187,12 +208,10 @@ export default function UploadPage() {
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: normalizeHeader,
       complete: (results) => {
-        const normalizedFields = results.meta.fields.map((f) =>
-          f.toLowerCase().trim().replace(/ /g, '_')
-        )
         const errors = validateCSV(results.data, results.meta.fields)
-        setFields(normalizedFields)
+        setFields(results.meta.fields)
         setPreview(results.data.slice(0, 8))
         setValidationErrors(errors)
         setStep(1)

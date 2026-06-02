@@ -259,6 +259,25 @@ class MarksViewSet(viewsets.ModelViewSet):
             file_content = uploaded_file.read().decode('utf-8')
             df = pd.read_csv(StringIO(file_content))
             df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
+            
+            column_aliases = {
+                'name': 'student_name',
+                'student': 'student_name',
+                'studentname': 'student_name',
+                'course': 'subject',
+                'class': 'subject',
+                'marks': 'marks_obtained',
+                'score': 'marks_obtained',
+                'obtained': 'marks_obtained',
+                'max': 'max_marks',
+                'total': 'max_marks',
+                'total_marks': 'max_marks',
+                'type': 'exam_type',
+                'exam': 'exam_type',
+                'date': 'exam_date',
+                'time': 'exam_date',
+            }
+            df.rename(columns=column_aliases, inplace=True)
 
             required_columns = ['student_name', 'subject', 'marks_obtained', 'max_marks', 'exam_type', 'exam_date']
             missing = [col for col in required_columns if col not in df.columns]
