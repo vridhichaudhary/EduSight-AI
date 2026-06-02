@@ -141,7 +141,7 @@ class LLMFactory:
 
     @staticmethod
     def create(
-        model:       str   = 'gemini-2.5-pro',
+        model:       str   = 'gemini-2.5-flash',
         temperature: float = 0.7,
         max_tokens:  int   = 1000,
     ):
