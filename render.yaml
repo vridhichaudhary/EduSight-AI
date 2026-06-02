@@ -1,16 +1,16 @@
-services:
-  # PostgreSQL Database
-  - type: pgo
-    name: edusight-db
-    plan: free
+databases:
+  # PostgreSQL Database (managed, free tier)
+  - name: edusight-db
     databaseName: sppredictor_db
     user: postgres
+    plan: free
 
+services:
   # Redis for Celery Broker/Cache
-  - type: redis
+  - type: keyvalue
     name: edusight-redis
     plan: free
-    ipAllowList: [] # Allow internal access only
+    ipAllowList: []
 
   # Web Service (Django API)
   - type: web
@@ -20,7 +20,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerCommand: ./entrypoint.sh
     plan: free
-    healthCheckPath: /api/rag/status/ # Verify API is up
+    healthCheckPath: /api/rag/status/
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -28,21 +28,17 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: edusight-redis
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
-      - key: DB_ENGINE
-        value: "django.db.backends.postgresql"
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        # Vercel URL can be updated later if needed, wildcards generally aren't secure but can be used or explicitly set to front-end domain
-        value: "https://edusight-ai.vercel.app" 
-      # LLM API Keys to be populated manually
+        value: "https://edusight-ai.vercel.app"
       - key: GOOGLE_API_KEY
         sync: false
 
@@ -61,7 +57,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: edusight-redis
           property: connectionString
       - key: SECRET_KEY
