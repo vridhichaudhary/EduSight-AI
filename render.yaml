@@ -2,7 +2,7 @@ databases:
   # PostgreSQL Database (managed, free tier)
   - name: edusight-db
     databaseName: sppredictor_db
-    user: postgres
+    user: edusight_user
     plan: free
 
 services:
