@@ -5,7 +5,8 @@ echo "Applying database migrations..."
 python manage.py migrate --noinput
 
 # Load initial data if required (can add conditional later)
-# python manage.py loaddata initial_data.json
+echo "Seeding demo student data if not exists..."
+python manage.py seed_demo
 
 # Start Gunicorn processes
 echo "Starting Gunicorn..."

@@ -21,7 +21,8 @@ class Command(BaseCommand):
         if created:
             self.stdout.write(self.style.SUCCESS(f'Created student: {student.name}'))
         else:
-            self.stdout.write(self.style.WARNING(f'Student {student.name} already exists. Appending data...'))
+            self.stdout.write(self.style.WARNING(f'Student {student.name} already exists. Skipping data generation to prevent duplicates.'))
+            return
 
         # 2. Create standard subjects
         subjects = {
