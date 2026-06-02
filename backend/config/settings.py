@@ -5,6 +5,7 @@ Django settings for Student Performance Predictor.
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import dj_database_url
 
 # ─────────────────────────────────────────────
 # BASE DIRECTORY
@@ -106,6 +107,14 @@ DATABASES = {
         },
     }
 }
+
+if os.getenv('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.config(
+        default=os.getenv('DATABASE_URL'),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+
 
 
 # ─────────────────────────────────────────────
