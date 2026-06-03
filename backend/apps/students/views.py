@@ -4,15 +4,17 @@ API Views for Student Performance Predictor.
 Handles all HTTP requests for:
 - Students (CRUD)
 - Subjects (CRUD)
-- Marks (CRUD + CSV upload)
+- Marks (CRUD + CSV/Excel/PDF upload + Bulk JSON)
 - Dashboard data
 - Analysis trigger
 - Chat
 """
 
 import logging
+import io
 import pandas as pd
 from io import StringIO
+from datetime import datetime, date
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Max, Min, Count
@@ -239,43 +241,52 @@ class MarksViewSet(viewsets.ModelViewSet):
     def upload_csv(self, request):
         """
         POST /api/marks/upload-csv/
-        Upload a CSV with columns: student_name, subject, marks_obtained,
-        max_marks, exam_type, exam_date
+        Upload CSV, Excel (.xlsx/.xls), or PDF with student marks.
         """
         try:
             if 'file' not in request.FILES:
                 return APIResponse.error(
                     message='No file uploaded',
-                    errors={'file': 'Please upload a CSV file'}
+                    errors={'file': 'Please upload a file'}
                 )
 
             uploaded_file = request.FILES['file']
-            if not uploaded_file.name.endswith('.csv'):
+            filename = uploaded_file.name.lower()
+
+            # Route to correct parser
+            if filename.endswith('.csv'):
+                df = _parse_csv_file(uploaded_file)
+            elif filename.endswith(('.xlsx', '.xls')):
+                df = _parse_excel_file(uploaded_file)
+            elif filename.endswith('.pdf'):
+                df = _parse_pdf_file(uploaded_file)
+            else:
                 return APIResponse.error(
-                    message='Invalid file type',
-                    errors={'file': 'Only CSV files are accepted'}
+                    message='Unsupported file type',
+                    errors={'file': 'Only CSV (.csv), Excel (.xlsx, .xls), and PDF (.pdf) files are accepted'}
                 )
 
-            file_content = uploaded_file.read().decode('utf-8')
-            df = pd.read_csv(StringIO(file_content))
-            df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
-            
+            if df is None or df.empty:
+                return APIResponse.error(
+                    message='No data found in file',
+                    errors={'file': 'File appears empty or unreadable'}
+                )
+
+            # Normalize column names
+            df.columns = (
+                df.columns.astype(str)
+                .str.lower().str.strip()
+                .str.replace(' ', '_').str.replace('-', '_')
+            )
+
+            # Apply column aliases for flexible headings
             column_aliases = {
-                'name': 'student_name',
-                'student': 'student_name',
-                'studentname': 'student_name',
-                'course': 'subject',
-                'class': 'subject',
-                'marks': 'marks_obtained',
-                'score': 'marks_obtained',
-                'obtained': 'marks_obtained',
-                'max': 'max_marks',
-                'total': 'max_marks',
-                'total_marks': 'max_marks',
-                'type': 'exam_type',
-                'exam': 'exam_type',
-                'date': 'exam_date',
-                'time': 'exam_date',
+                'name': 'student_name', 'student': 'student_name', 'studentname': 'student_name',
+                'course': 'subject', 'class': 'subject',
+                'marks': 'marks_obtained', 'score': 'marks_obtained', 'obtained': 'marks_obtained',
+                'max': 'max_marks', 'total': 'max_marks', 'total_marks': 'max_marks',
+                'type': 'exam_type', 'exam': 'exam_type',
+                'date': 'exam_date', 'time': 'exam_date',
             }
             df.rename(columns=column_aliases, inplace=True)
 
@@ -283,8 +294,12 @@ class MarksViewSet(viewsets.ModelViewSet):
             missing = [col for col in required_columns if col not in df.columns]
             if missing:
                 return APIResponse.error(
-                    message='Missing required columns in CSV',
-                    errors={'missing_columns': missing, 'required_columns': required_columns}
+                    message='Missing required columns',
+                    errors={
+                        'missing_columns': missing,
+                        'required_columns': required_columns,
+                        'found_columns': list(df.columns),
+                    }
                 )
 
             created_marks = []
@@ -301,17 +316,20 @@ class MarksViewSet(viewsets.ModelViewSet):
                     )
                     subject, _ = Subject.objects.get_or_create(
                         name=str(row['subject']).strip(),
-                        defaults={'code': str(row['subject'])[:3].upper() + '101'}
+                        defaults={'code': str(row['subject'])[:4].upper() + '101'}
                     )
-                    exam_date = pd.to_datetime(row['exam_date']).date()
+                    exam_date = pd.to_datetime(row['exam_date'], errors='coerce')
+                    if pd.isna(exam_date):
+                        exam_date = pd.Timestamp.now()
                     mark, created = Marks.objects.get_or_create(
                         student=student,
                         subject=subject,
-                        exam_type=str(row['exam_type']).lower().strip(),
-                        exam_date=exam_date,
+                        exam_type=str(row.get('exam_type', 'quiz')).lower().strip(),
+                        exam_date=exam_date.date(),
                         defaults={
                             'marks_obtained': float(row['marks_obtained']),
                             'max_marks': float(row['max_marks']),
+                            'topic': str(row.get('topic', '')),
                         }
                     )
                     if created:
@@ -325,7 +343,7 @@ class MarksViewSet(viewsets.ModelViewSet):
 
             if not created_marks and errors:
                 return APIResponse.error(
-                    message='CSV upload failed — no records created',
+                    message='Upload failed — no records created',
                     errors={'row_errors': errors}
                 )
 
@@ -333,17 +351,199 @@ class MarksViewSet(viewsets.ModelViewSet):
                 data={
                     'records_created': len(created_marks),
                     'records_failed': len(errors),
+                    'file_type': filename.split('.')[-1].upper(),
                     'created_marks': created_marks[:5],
                     'errors': errors[:5] if errors else [],
                 },
-                message=f'Successfully uploaded {len(created_marks)} mark records'
+                message=f'Uploaded {len(created_marks)} records from {uploaded_file.name}'
             )
 
-        except pd.errors.ParserError:
-            return APIResponse.error(message='Invalid CSV format', errors={'file': 'File could not be parsed as CSV'})
         except Exception as e:
-            logger.error(f"CSV upload error: {str(e)}")
-            return APIResponse.error(message='CSV upload failed', errors={'detail': str(e)})
+            logger.error(f"File upload error: {str(e)}")
+            return APIResponse.error(message='Upload failed', errors={'detail': str(e)})
+
+
+# ─────────────────────────────────────────────
+# FILE PARSER HELPERS
+# ─────────────────────────────────────────────
+
+def _parse_csv_file(uploaded_file):
+    """Parse CSV file to DataFrame."""
+    content = uploaded_file.read().decode('utf-8-sig')
+    return pd.read_csv(StringIO(content))
+
+
+def _parse_excel_file(uploaded_file):
+    """Parse Excel .xlsx or .xls file to DataFrame."""
+    try:
+        file_bytes = uploaded_file.read()
+        return pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl', sheet_name=0)
+    except Exception as e:
+        logger.error(f"Excel parse error: {e}")
+        raise ValueError(f"Could not parse Excel file: {e}")
+
+
+def _parse_pdf_file(uploaded_file):
+    """Parse PDF file containing a marks table using pdfplumber."""
+    try:
+        import pdfplumber
+        file_bytes = uploaded_file.read()
+        all_rows = []
+        headers = None
+
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page_num, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                for table in tables:
+                    if not table:
+                        continue
+                    if headers is None:
+                        headers = [
+                            str(h).lower().strip().replace(' ', '_') if h else f'col_{i}'
+                            for i, h in enumerate(table[0])
+                        ]
+                        all_rows.extend(table[1:])
+                    else:
+                        all_rows.extend(table[1:])
+
+        if not headers or not all_rows:
+            raise ValueError(
+                "No table data found in PDF. "
+                "Ensure your PDF contains a properly formatted table."
+            )
+
+        df = pd.DataFrame(all_rows, columns=headers)
+        return df.dropna(how='all')
+
+    except ImportError:
+        raise ValueError("pdfplumber not installed. Run: pip install pdfplumber")
+    except Exception as e:
+        logger.error(f"PDF parse error: {e}")
+        raise ValueError(f"Could not parse PDF file: {e}")
+
+
+# ─────────────────────────────────────────────
+# BULK MARKS CREATE VIEW
+# ─────────────────────────────────────────────
+class BulkMarksCreateView(APIView):
+    """
+    Create multiple mark entries in one request (used by manual entry form).
+
+    POST /api/marks/bulk/
+    Body: { "student_name": "...", "grade_level": 10, "entries": [...] }
+    """
+
+    def post(self, request):
+        try:
+            student_name = request.data.get('student_name', '').strip()
+            grade_level  = int(request.data.get('grade_level', 10))
+            entries      = request.data.get('entries', [])
+
+            if not student_name:
+                return APIResponse.error(
+                    message='student_name is required',
+                    errors={'student_name': 'This field is required'}
+                )
+            if not entries or len(entries) == 0:
+                return APIResponse.error(
+                    message='At least one mark entry is required',
+                    errors={'entries': 'entries array cannot be empty'}
+                )
+            if len(entries) > 200:
+                return APIResponse.error(
+                    message='Too many entries',
+                    errors={'entries': 'Maximum 200 entries per request'}
+                )
+
+            student, student_created = Student.objects.get_or_create(
+                name=student_name,
+                defaults={
+                    'email': f"{student_name.lower().replace(' ', '.')}@student.edusight.com",
+                    'grade_level': grade_level,
+                }
+            )
+
+            created_marks = []
+            skipped_marks = []
+            errors_list   = []
+
+            for i, entry in enumerate(entries):
+                try:
+                    subject_name   = str(entry.get('subject', '')).strip()
+                    marks_obtained = float(entry.get('marks_obtained', 0))
+                    max_marks      = float(entry.get('max_marks', 100))
+                    exam_type      = str(entry.get('exam_type', 'quiz')).lower().strip()
+                    exam_date_str  = str(entry.get('exam_date', '')).strip()
+                    topic          = str(entry.get('topic', '')).strip()
+
+                    if not subject_name:
+                        errors_list.append({'row': i + 1, 'error': 'subject is required'})
+                        continue
+                    if marks_obtained > max_marks:
+                        errors_list.append({'row': i + 1, 'error': f'marks_obtained ({marks_obtained}) cannot exceed max_marks ({max_marks})'})
+                        continue
+
+                    try:
+                        exam_date = datetime.strptime(exam_date_str, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        exam_date = date.today()
+
+                    valid_types = ['quiz', 'midterm', 'final', 'assignment', 'practical', 'project']
+                    if exam_type not in valid_types:
+                        exam_type = 'quiz'
+
+                    subject_obj, _ = Subject.objects.get_or_create(
+                        name=subject_name,
+                        defaults={'code': subject_name[:4].upper() + '101'}
+                    )
+
+                    mark, created = Marks.objects.get_or_create(
+                        student=student,
+                        subject=subject_obj,
+                        exam_type=exam_type,
+                        exam_date=exam_date,
+                        defaults={
+                            'marks_obtained': marks_obtained,
+                            'max_marks': max_marks,
+                            'topic': topic,
+                        }
+                    )
+
+                    if created:
+                        created_marks.append({
+                            'subject': subject_name,
+                            'percentage': float(mark.percentage),
+                            'exam_date': str(exam_date),
+                        })
+                    else:
+                        skipped_marks.append(subject_name)
+
+                except Exception as row_err:
+                    errors_list.append({'row': i + 1, 'error': str(row_err)})
+
+            if not created_marks and errors_list:
+                return APIResponse.error(
+                    message='No records created due to errors',
+                    errors={'row_errors': errors_list, 'records_skipped': len(skipped_marks)}
+                )
+
+            return APIResponse.created(
+                data={
+                    'student_id':      student.id,
+                    'student_name':    student.name,
+                    'student_created': student_created,
+                    'records_created': len(created_marks),
+                    'records_skipped': len(skipped_marks),
+                    'records_failed':  len(errors_list),
+                    'created_marks':   created_marks[:10],
+                    'errors':          errors_list[:5],
+                },
+                message=f'Successfully created {len(created_marks)} mark entries for {student_name}'
+            )
+
+        except Exception as e:
+            logger.error(f"Bulk create error: {str(e)}")
+            return APIResponse.error(message='Bulk create failed', errors={'detail': str(e)})
 
 
 # ─────────────────────────────────────────────
