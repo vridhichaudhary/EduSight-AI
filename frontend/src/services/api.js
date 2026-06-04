@@ -85,6 +85,34 @@ export const dashboardAPI = {
 export const analysisAPI = {
   trigger: (studentId) =>
     api.post('/api/analysis/trigger/', { student_id: studentId }),
+
+  getStatus: (taskId) =>
+    api.get(`/api/analysis/status/${taskId}/`),
+
+  getSummary: (studentId) =>
+    api.get(`/api/analysis/summary/${studentId}/`),
+
+  // ── PDF Download ──
+  downloadReport: async (studentId, studentName) => {
+    const response = await api.get(
+      `/api/analysis/report/${studentId}/`,
+      { responseType: 'blob' }
+    )
+
+    // Create download link
+    const url      = window.URL.createObjectURL(
+      new Blob([response.data], { type: 'application/pdf' })
+    )
+    const link     = document.createElement('a')
+    link.href      = url
+    link.download  = (
+      `EduSight_Report_${studentName.replace(/\s+/g, '_')}.pdf`
+    )
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  },
 }
 
 // ─── Chat API ───

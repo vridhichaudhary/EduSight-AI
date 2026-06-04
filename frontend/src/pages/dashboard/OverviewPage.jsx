@@ -25,6 +25,7 @@ import SubjectRadarChart from '../../components/charts/SubjectRadarChart'
 import GradeTrendChart from '../../components/charts/GradeTrendChart'
 import WeakAreaChart from '../../components/charts/WeakAreaChart'
 import { SkeletonCard } from '../../components/ui/Skeleton'
+import DownloadReportButton from '../../components/ui/DownloadReportButton'
 
 // ─── Predictions Table ───
 function PredictionsTable({ predictions = [] }) {
@@ -223,6 +224,12 @@ export default function OverviewPage() {
             >
               Refresh
             </Button>
+
+            <DownloadReportButton
+              studentId={studentId}
+              studentName={student?.name || 'Student'}
+            />
+
             <Button
               variant="secondary"
               size="sm"

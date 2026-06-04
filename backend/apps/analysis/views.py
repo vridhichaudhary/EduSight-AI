@@ -10,6 +10,7 @@ Endpoints:
 
 import logging
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 from rest_framework.views import APIView
 from celery.result import AsyncResult
 from apps.students.models import Student, AnalysisLog, Prediction, WeakArea
@@ -264,3 +265,88 @@ class AnalysisSummaryView(APIView):
         except Exception as e:
             logger.error(f"Summary error: {str(e)}")
             return APIResponse.error(message='Failed to fetch summary')
+
+
+class DownloadReportView(APIView):
+    """
+    Generate and download PDF performance report.
+
+    GET /api/analysis/report/{student_id}/
+
+    Returns:
+        PDF file as binary response (application/pdf)
+        Browser automatically triggers download
+    """
+
+    def get(self, request, student_id):
+        try:
+            from apps.students.models import Student
+            student = get_object_or_404(Student, pk=student_id)
+
+            # ── Check data exists ──
+            from apps.students.models import Marks
+            marks_count = Marks.objects.filter(student=student).count()
+
+            if marks_count == 0:
+                return APIResponse.error(
+                    message='No marks data found for report',
+                    errors={
+                        'hint': (
+                            'Upload marks data and run analysis first.'
+                        )
+                    }
+                )
+
+            # ── Generate PDF ──
+            from apps.analysis.pdf_generator import (
+                generate_student_report
+            )
+
+            logger.info(
+                f"Generating PDF report: student {student_id}"
+            )
+
+            pdf_bytes = generate_student_report(student_id)
+
+            if not pdf_bytes:
+                return APIResponse.error(
+                    message='PDF generation failed',
+                    errors={
+                        'hint': (
+                            'Make sure ReportLab is installed '
+                            'and analysis has been run.'
+                        )
+                    },
+                    status_code=500
+                )
+
+            # ── Return PDF response ──
+            filename = (
+                f"EduSight_Report_"
+                f"{student.name.replace(' ', '_')}_"
+                f"{student_id}.pdf"
+            )
+
+            response = HttpResponse(
+                pdf_bytes,
+                content_type='application/pdf'
+            )
+            response['Content-Disposition'] = (
+                f'attachment; filename="{filename}"'
+            )
+            response['Content-Length'] = len(pdf_bytes)
+
+            logger.info(
+                f"PDF report downloaded: student {student_id}, "
+                f"{len(pdf_bytes)} bytes"
+            )
+
+            return response
+
+        except Exception as e:
+            logger.error(f"PDF download error: {e}")
+            return APIResponse.error(
+                message='Failed to generate report',
+                errors={'detail': str(e)},
+                status_code=500
+            )

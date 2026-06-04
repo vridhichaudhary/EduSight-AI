@@ -8,6 +8,7 @@ from .views import (
     AnalysisStatusView,
     AnalysisLogsView,
     AnalysisSummaryView,
+    DownloadReportView,
 )
 
 urlpatterns = [
@@ -30,5 +31,10 @@ urlpatterns = [
         'summary/<int:student_id>/',
         AnalysisSummaryView.as_view(),
         name='analysis-summary'
+    ),
+    path(
+        'report/<int:student_id>/',
+        DownloadReportView.as_view(),
+        name='download-report'
     ),
 ]

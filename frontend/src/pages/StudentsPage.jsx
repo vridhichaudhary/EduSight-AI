@@ -14,6 +14,7 @@ import { Input } from '../components/ui/Input'
 import Badge from '../components/ui/Badge'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
+import DownloadReportButton from '../components/ui/DownloadReportButton'
 
 function getGradeBadge(avg) {
   if (avg >= 90) return { variant: 'success', label: 'Excellent' }
@@ -123,7 +124,14 @@ export default function StudentsPage() {
                 <div className="col-span-2">
                   <Badge variant={variant} dot>{label}</Badge>
                 </div>
-                <div className="col-span-2 flex justify-end">
+                <div className="col-span-2 flex justify-end gap-2">
+                  <DownloadReportButton
+                    studentId={student.id}
+                    studentName={student.name}
+                    size="sm"
+                    variant="ghost"
+                    label="PDF"
+                  />
                   <Link to={`/dashboard/${student.id}/overview`}>
                     <Button variant="ghost" size="sm" iconRight={ArrowRight}>
                       View
