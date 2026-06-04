@@ -15,6 +15,7 @@ from .views import (
     TriggerAnalysisView,
     ChatView,
     BulkMarksCreateView,
+    ComparisonView,
 )
 
 router = DefaultRouter()
@@ -30,4 +31,5 @@ urlpatterns = [
     path('dashboard/<int:student_id>/', DashboardView.as_view(), name='dashboard'),
     path('chat/query/', ChatView.as_view(), name='chat-query'),
     path('marks/bulk/', BulkMarksCreateView.as_view(), name='marks-bulk-create'),
+    path('compare/', ComparisonView.as_view(), name='compare-students'),
 ]

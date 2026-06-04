@@ -19,6 +19,7 @@ import PredictionsPage     from './pages/dashboard/PredictionsPage'
 import WeakAreasPage       from './pages/dashboard/WeakAreasPage'
 import RecommendationsPage from './pages/dashboard/RecommendationsPage'
 import ChatPage            from './pages/dashboard/ChatPage'
+import ComparePage         from './pages/ComparePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/"        element={<HomePage />} />
             <Route path="/students" element={<StudentsPage />} />
             <Route path="/upload"   element={<UploadPage />} />
+            <Route path="/compare"  element={<ComparePage />} />
 
             {/* Dashboard routes (with sidebar) */}
             <Route

@@ -123,4 +123,14 @@ export const chatAPI = {
     api.get('/api/chat/query/', { params: { student_id: studentId } }),
 }
 
+// ─── Comparison API ───
+export const comparisonAPI = {
+  compare: (studentIds) => {
+    const ids = Array.isArray(studentIds)
+      ? studentIds.join(',')
+      : studentIds
+    return api.get(`/api/compare/?student_ids=${ids}`)
+  },
+}
+
 export default api

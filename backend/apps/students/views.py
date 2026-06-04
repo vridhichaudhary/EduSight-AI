@@ -18,6 +18,7 @@ from datetime import datetime, date
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Max, Min, Count
+from django.db.models.functions import TruncMonth
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -850,3 +851,179 @@ class ChatView(APIView):
             )
         except Exception as e:
             return APIResponse.error(message='Failed to get chat history')
+
+
+class ComparisonView(APIView):
+    """
+    Get comparison data for multiple students.
+
+    GET /api/compare/?student_ids=1,2,3
+
+    Returns radar, trend, and subject data
+    for all requested students in one response.
+    """
+
+    def get(self, request):
+        try:
+            ids_param   = request.query_params.get('student_ids', '')
+            student_ids = [
+                int(sid.strip())
+                for sid in ids_param.split(',')
+                if sid.strip().isdigit()
+            ]
+
+            if not student_ids:
+                return APIResponse.error(
+                    message='student_ids parameter required',
+                    errors={
+                        'example': '/api/compare/?student_ids=1,2,3'
+                    }
+                )
+
+            if len(student_ids) > 4:
+                return APIResponse.error(
+                    message='Maximum 4 students can be compared',
+                    errors={'max': 4}
+                )
+
+            # ── Distinct colors per student ──
+            STUDENT_COLORS = [
+                '#4f46e5',   # indigo
+                '#22c55e',   # green
+                '#f59e0b',   # amber
+                '#ef4444',   # red
+            ]
+
+            comparison_data = []
+
+            for i, sid in enumerate(student_ids):
+                try:
+                    student = Student.objects.get(pk=sid)
+                    marks   = Marks.objects.filter(
+                        student=student
+                    ).select_related('subject')
+
+                    # Per-subject averages
+                    subject_avgs = {}
+                    for item in marks.values(
+                        'subject__name'
+                    ).annotate(avg=Avg('percentage')):
+                        subject_avgs[item['subject__name']] = round(
+                            float(item['avg']), 2
+                        )
+
+                    # Monthly trend using TruncMonth (cross-db safe)
+                    monthly = (
+                        marks
+                        .annotate(month=TruncMonth('exam_date'))
+                        .values('month')
+                        .annotate(avg=Avg('percentage'))
+                        .order_by('month')
+                    )
+
+                    trend = [
+                        {
+                            'month': (
+                                item['month'].strftime('%b %Y')
+                                if item['month'] else ''
+                            ),
+                            'percentage': round(float(item['avg']), 2),
+                        }
+                        for item in monthly
+                    ]
+
+                    stats = marks.aggregate(
+                        avg   = Avg('percentage'),
+                        high  = Max('percentage'),
+                        low   = Min('percentage'),
+                        total = Count('id'),
+                    )
+
+                    comparison_data.append({
+                        'student_id':       sid,
+                        'student_name':     student.name,
+                        'grade_level':      student.grade_level,
+                        'color':            STUDENT_COLORS[
+                            i % len(STUDENT_COLORS)
+                        ],
+                        'overall_avg':      round(
+                            float(stats['avg'] or 0), 2
+                        ),
+                        'highest':          round(
+                            float(stats['high'] or 0), 2
+                        ),
+                        'lowest':           round(
+                            float(stats['low'] or 0), 2
+                        ),
+                        'total_exams':      stats['total'] or 0,
+                        'subject_averages': subject_avgs,
+                        'trend':            trend,
+                    })
+
+                except Student.DoesNotExist:
+                    comparison_data.append({
+                        'student_id': sid,
+                        'error':      f'Student {sid} not found',
+                    })
+
+            # ── Build unified subjects list ──
+            all_subjects = set()
+            for d in comparison_data:
+                all_subjects.update(
+                    d.get('subject_averages', {}).keys()
+                )
+            all_subjects = sorted(list(all_subjects))
+
+            # ── Radar data: unified format for Recharts ──
+            radar_data = []
+            for subject in all_subjects:
+                point = {'subject': subject, 'fullMark': 100}
+                for d in comparison_data:
+                    if 'error' not in d:
+                        point[d['student_name']] = d[
+                            'subject_averages'
+                        ].get(subject, 0)
+                radar_data.append(point)
+
+            # ── Trend data: unified format ──
+            all_months = set()
+            for d in comparison_data:
+                for t in d.get('trend', []):
+                    all_months.add(t['month'])
+            all_months = sorted(list(all_months))
+
+            trend_data = []
+            for month in all_months:
+                point = {'month': month}
+                for d in comparison_data:
+                    if 'error' not in d:
+                        match = next(
+                            (t for t in d.get('trend', [])
+                             if t['month'] == month),
+                            None
+                        )
+                        point[d['student_name']] = (
+                            match['percentage'] if match else None
+                        )
+                trend_data.append(point)
+
+            return APIResponse.success(
+                data={
+                    'students':      comparison_data,
+                    'subjects':      all_subjects,
+                    'radar_data':    radar_data,
+                    'trend_data':    trend_data,
+                    'student_count': len(comparison_data),
+                },
+                message=(
+                    f'Comparison data for {len(student_ids)} students'
+                )
+            )
+
+        except Exception as e:
+            logger.error(f"Comparison error: {e}")
+            return APIResponse.error(
+                message='Comparison failed',
+                errors={'detail': str(e)}
+            )
+

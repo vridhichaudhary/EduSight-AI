@@ -10,6 +10,7 @@ import Button from '../ui/Button'
 
 const navLinks = [
   { href: '/students', label: 'Students', icon: Users },
+  { href: '/compare',  label: 'Compare',  icon: BarChart2 },
   { href: '/upload',   label: 'Upload',   icon: Upload },
 ]
 
