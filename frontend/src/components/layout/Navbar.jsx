@@ -72,7 +72,7 @@ export default function Navbar() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => window.open('http://localhost:8000/api/docs/', '_blank')}
+          onClick={() => window.open('/api/docs/', '_blank')}
         >
           API Docs
         </Button>
